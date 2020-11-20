@@ -20,6 +20,7 @@ struct Creeper
   float health = 1.0f;
   float distance = 10.0f;
 };
+
 bool Setup_SDL2();
 // Set up arrays of addends (numbers to add), array for sums (answers), push to gpu to execute.
 cudaError_t addWithCuda(const int* addends_1, const int* addends_2, int* sums, unsigned int size);
@@ -92,31 +93,22 @@ int main(int argc, char** argv)
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
   bool done = false;
   
-  // Create N creepers with full health at 10m distance.
+  /* Create N creepers with full health at 10m distance. ------------------------*/
   Creeper creepers[CREEPER_COUNT]{ 1.0f,10.0f };
   
+  // Randomise creeper distance and health
   rollCreepers(creepers);
-  // Add arrays in parallel.
-  cudaError_t cuda_status = castMeteorStrikeCuda(creepers);
-  if (cuda_status != cudaSuccess) {
-    fprintf(stderr, "castMeteorStrikeCuda failed!");
-    return 1;
-  }
 
-
+  /*   Add two arrays -----------------------------------------------------------*/
   const int array_size = 5;
   const int addends_1[array_size] = { 1, 2, 3, 4, 5 };
   const int addends_2[array_size] = { 10, 20, 30, 40, 50 };
   int sums[array_size] = { 0 };
-
+  bool added_arrays = false;
   // Add arrays in parallel.
-  cuda_status = addWithCuda(addends_1, addends_2, sums, array_size);
-  if (cuda_status != cudaSuccess) {
-    fprintf(stderr, "addWithCuda failed!");
-    return 1;
-  }
 
-  //////// begin imgui sdl main loop
+
+  /*  begin imgui sdl main loop ------------------------------------------------*/
   while (!done)
   {
     // Check if any window close or sdl exit events have been fired coming into this frame.
@@ -127,22 +119,53 @@ int main(int argc, char** argv)
     ImGui_ImplSDL2_NewFrame(window_p);
     ImGui::NewFrame();
 
-    // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+    // We have no problems until something fails:.
+    cudaError_t cuda_status = cudaSuccess;
+
+    // Imgui's example implementation of most features, great reference
     if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
 
     // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-    {
-      static int counter = 0;
+    ImGui::Begin("Coding our Cuda GPU");                          // Create a window called "Hello, world!" and append into it.
 
-      ImGui::Begin("Vec add results:");                          // Create a window called "Hello, world!" and append into it.
+    if (ImGui::Button("Add arrays"))
+    {
+      cuda_status = addWithCuda(addends_1, addends_2, sums, array_size);
+      if (cuda_status != cudaSuccess) {
+        fprintf(stderr, "addWithCuda failed!");
+      }
+      added_arrays = true;
+    }
+    if (added_arrays)
+    {
       ImGui::Text("{1,2,3,4,5} + {10,20,30,40,50} = {%d,%d,%d,%d,%d}\n",
         sums[0], sums[1], sums[2], sums[3], sums[4]);
-      ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+    // Smash creepers with meteorstrike spell.
+    ImGui::Text("Creeper 1 is %.1fm away and has %.0f%% health.", creepers[0].distance, roundf(creepers[0].health * 100));
+    if (ImGui::Button("Cast meteor strike"))
+    {
+      castMeteorStrikeCuda(creepers);
+      if (cuda_status != cudaSuccess) {
+        fprintf(stderr, "castMeteorStrikeCuda failed!");
+      }
+    }
+    ImGui::Spacing();
+
+    if (ImGui::Button("Re-roll creeper stats"))
+    {
+      rollCreepers(creepers);
+    }
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 
       //ImGui::SameLine();
-      ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-      ImGui::End();
-    }
+//    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::End();
 
     cao::Render_GUI(clear_color, io, window_p);
   }

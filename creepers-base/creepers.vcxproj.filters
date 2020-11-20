@@ -11,7 +11,7 @@
       <UniqueIdentifier>{ffe39fe2-3bf4-4791-9924-aef807d6f8f5}</UniqueIdentifier>
     </Filter>
     <Filter Include="cao">
-      <UniqueIdentifier>{9a1084b9-267c-4337-a74d-799e5cc6e28a}</UniqueIdentifier>
+      <UniqueIdentifier>{be2d7cbb-3061-4046-ba48-d78c1a5175f4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -33,11 +33,11 @@
     <ClCompile Include="..\..\libraries_cpp\dear_imgui\imgui_widgets.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_sdl_helpers.cpp">
-      <Filter>cao</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\libraries_cpp\gl3w\GL\gl3w.c">
       <Filter>imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui_sdl_helpers.cpp">
+      <Filter>cao</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -56,14 +56,14 @@
     <ClInclude Include="..\..\libraries_cpp\dear_imgui\imgui_internal.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="imgui_sdl_helpers.h">
-      <Filter>cao</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\libraries_cpp\gl3w\GL\gl3w.h">
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\libraries_cpp\gl3w\GL\glcorearb.h">
       <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui_sdl_helpers.h">
+      <Filter>cao</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

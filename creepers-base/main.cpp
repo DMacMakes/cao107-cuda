@@ -1,4 +1,28 @@
+/***********************************************************************************
+* 
+* CREEPERS 
+*   Defend yourself from swarming creatures that do terrible things (like take
+*   your phone and message people who's contacts you should have deleted ages ago).
+*
+*   Use the power of your GPU to cast a Meteor Strike spell, damaging all enemies
+*   within a given radius, and to various levels based on their distance.
+*
+* HOMEWORK
+*   Search for the word TODO. You'll find it in several comments along with 
+*   tasks for you to carry out.
+*     - In summary, get castMeteorStrikeCuda working. It needs to set up
+*       the GPU memory, call the spell kernel, copy back back the info.
+* 
+* NOTES
+*   
+* Creeper Stats
+*   Health and distance are rolled (randomised, as in rolling dice in a 
+*   table top game) on start up and can be rolled again with a button. 
+*     - The CPU is used because random number libraries for CUDA are 
+*       too complicated for this example
 
+
+***********************************************************************************/
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include <SDL.h>
@@ -15,9 +39,14 @@
 #include <time.h>
 #include "curand_kernel.h"
 
+// Swarming creatures that do terrible things like ask your friends where they 
+// bought their shirt/pants/shoes and then look you up and down.
 struct Creeper
 {
+  // Health in range 0.0 to 1.0, equivalent to a percentage.
   float health = 1.0f;
+  
+  // Distance in meters. 10.0f = 10m.
   float distance = 10.0f;
 };
 
@@ -26,6 +55,7 @@ bool Setup_SDL2();
 cudaError_t addWithCuda(const int* addends_1, const int* addends_2, int* sums, unsigned int size);
 cudaError_t castMeteorStrikeCuda(Creeper* creepers);
 cudaError_t Cuda_Cleanup();
+void rollCreepers(Creeper* creepers);
 
 SDL_Window* window_p{ nullptr };
 SDL_GLContext gl_context;
@@ -33,29 +63,22 @@ const char* glsl_version_p = "";
 const unsigned int CREEPER_COUNT = 32;
 const int CREEPER_MAX_DIST = 20;
 
-// The kernel! __global__ tells nvcc to define this over in GPU memory
+/*--------------------------------------------------------------- KERNELS for gpu */
+
+// __global__ tells nvcc to define kernels in GPU memory
+
+// For each index n, add the value at n in each array of addends (terms)
+// and place the sum (result) in the sums array.
 __global__ void sumIntArrays_k(const int* addends_1, const int* addends_2, int* sums)
 {
   int i = threadIdx.x;
   sums[i] = addends_1[i] + addends_2[i];
 }
 
-void rollCreepers(Creeper* creepers)
-{
-  //int i = threadIdx.x;
-  for (int id = 0; id < CREEPER_COUNT; id++)
-  {
-    creepers[id].health = static_cast<float>(rand()) / RAND_MAX;
-    creepers[id].distance = static_cast<float>(rand() % (CREEPER_MAX_DIST+1));
-  }
-    // Set random health and distance for each creeper.
-  // Maybe we can set up 300 in parallel? Will sizeof Creeper work
-}
-
+// Kernel of Meteor Strike: Area of effect spell, with three bands of damage.
+// Damage creepers in supplied array based on their distance from hero.
 __global__ void castMeteorStrike_kernel(Creeper* creepers)
 {
-  // Area of effect spell, with three bands of damage.
-  // Damage all n bad guys based on their distance from hero.
   int i = threadIdx.x;
   if (creepers[i].distance < 1.5f)
   {
@@ -77,6 +100,8 @@ __global__ void castMeteorStrike_kernel(Creeper* creepers)
   // distance between 2 points. (pythagoras)
 }
 
+/*------------------------------------------------------------------------- MAIN */
+
 // Don't remove these arguments from the main function declaration
 // or the nvidia nvcc compiler driver will spit the dummy.
 int main(int argc, char** argv)
@@ -84,8 +109,8 @@ int main(int argc, char** argv)
   bool err = Setup_SDL2();
   // EXIT if SDL2 setup failed. Setup_SDL2 will have displayed an error already.
   if (err) return 1;
-  srand(time(NULL));
-  //Setup_ImGui();
+  srand(static_cast<int>(time(NULL)));
+  
   cao::Setup_ImGui(window_p, gl_context, glsl_version_p);
   ImGuiIO& io = ImGui::GetIO(); (void)io;
   // Our state
@@ -105,8 +130,6 @@ int main(int argc, char** argv)
   const int addends_2[array_size] = { 10, 20, 30, 40, 50 };
   int sums[array_size] = { 0 };
   bool added_arrays = false;
-  // Add arrays in parallel.
-
 
   /*  begin imgui sdl main loop ------------------------------------------------*/
   while (!done)
@@ -144,8 +167,14 @@ int main(int argc, char** argv)
 
     ImGui::Spacing();
     ImGui::Spacing();
+    
+    // TODO: Display the rest of the creepers here too, not just the first.
+    //  Use something more visual and immediate than text output below: Look through
+    //  the demo window, maybe there's a status bar or some other indicator.
+    ImGui::Text("Creeper 1 is %.1fm away and has %.0f%% health.", 
+      creepers[0].distance, roundf(creepers[0].health * 100));
+    
     // Smash creepers with meteorstrike spell.
-    ImGui::Text("Creeper 1 is %.1fm away and has %.0f%% health.", creepers[0].distance, roundf(creepers[0].health * 100));
     if (ImGui::Button("Cast meteor strike"))
     {
       castMeteorStrikeCuda(creepers);
@@ -161,10 +190,8 @@ int main(int argc, char** argv)
     }
     ImGui::Spacing();
     ImGui::Spacing();
-    ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+    ImGui::Checkbox("Demo Window", &show_demo_window);  
 
-      //ImGui::SameLine();
-//    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::End();
 
     cao::Render_GUI(clear_color, io, window_p);
@@ -172,47 +199,50 @@ int main(int argc, char** argv)
   
   // Shut down and clean up the GL/SDL/ImGui bits
   cao::Cleanup_GUI(window_p, gl_context);
-  
   // exit with error if cuda cleanup fails.
   if (Cuda_Cleanup() != cudaSuccess) return 1;
-
   return 0;
 }
 
-// CudaCleanup makes sure cuda profilers can display info up to the end of execution.
-cudaError_t Cuda_Cleanup()
+// Set random health (minimum 50% aka 0.5) and distance (meters) for each creeper.
+// "roll" as in rolling dice to generate random stats in a table top game.
+void rollCreepers(Creeper* creepers)
 {
-  //cudaDeviceReset must be called before exiting in order for profiling and
-  // tracing tools such as Nsight and Visual Profiler to show complete traces.
-  cudaError_t status = cudaDeviceReset();
-  if (status != cudaSuccess) {
-    fprintf(stderr, "cudaDeviceReset failed!");
+  // Set random health (minimum 50% aka 0.5) and distance (meters) for each creeper.
+  for (int id = 0; id < CREEPER_COUNT; id++)
+  {
+    float randRatio = static_cast<float>(rand()) / RAND_MAX; // float from 0-1.
+    creepers[id].health = 1.0f - (randRatio * 0.5f);          // between 0.5 and 1
+    creepers[id].distance = static_cast<float>(rand() % (CREEPER_MAX_DIST + 1));
   }
-  return status;
 }
 
+// Summon a mighty meteor blast to, using the gpu, deal area-of-effect 
+// damage to the supplied Creeper collection (pointer to an array)
 cudaError_t castMeteorStrikeCuda(Creeper* creepers)
 {
   cudaError_t cudaStatus = cudaSetDevice(0);
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
   }
+  
+  cudaStatus = cudaSuccess; // Reset
+  Creeper* dev_creepers = nullptr;    // Initialize your pointers with nullptr.
 
-  Creeper* dev_creepers;
-  // Allocate a block of memory on the gpu to hold the creepers
-/*  cudaStatus = cudaMalloc((void**)&dev_______, CREEPER_COUNT * ______(______));
+  // TODO: Allocate a block of memory on the gpu to hold the creeper collection
+  //cudaStatus = cudaMalloc((void**)&dev_______, CREEPER_COUNT * ______(______));
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMalloc failed!");
   }
 
-  // Copy creepers from host memory to GPU buffers.
-  cudaStatus = cudaMemcpy(_______, ______, ______ * ______(______), ______);
+  // TODO: Copy creepers from host memory to GPU buffers.
+  //cudaStatus = cudaMemcpy(_______, ______, ______ * ______(______), ______);
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMemcpy failed!");
   }
 
-  // Using 1 thread per creeper, blow them up.
-  _________kernel <<<1, CREEPER_COUNT >>> (______);
+  // TODO: Using 1 thread per creeper, blow them up.
+  //_________kernel <<<1, CREEPER_COUNT >>> (______);
 
   // Check for any errors launching the kernel
   cudaStatus = cudaGetLastError();
@@ -228,17 +258,20 @@ cudaError_t castMeteorStrikeCuda(Creeper* creepers)
     fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching castMeteorStrike_kernel!\n", cudaStatus);
   }
 
-  // Copy output vector from GPU buffer to host memory.
-  ______ = ______(______, ______, ______ * ______(______), ______);
-  if (______ != ______) {
-    fprintf(stderr, "______ failed!");
-  }
+  // TODO: Copy output vector from GPU memory to host memory.
+  // Look at the addWithCuda function to see how it works, compare with
+  // the copy TO gpu above (around line 220)
+  //______ = ______(______, ______, ______ * ______(______), ______);
+  //if (______ != ______) {
+  //  fprintf(stderr, "______ failed!");
+ // }
 
   cudaFree(dev_creepers);
-  */
+  
   return cudaStatus;
 
 }
+
 // Helper function for using CUDA to add vectors in parallel.
 // I'm guessing it adds numbers from vectors a and b and places them in the
 // same index in vector c. Meaningful names would be nice.
@@ -253,7 +286,6 @@ cudaError_t addWithCuda(const int* addends_1, const int* addends_2, int* sums, u
   cudaStatus = cudaSetDevice(0);
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
-    goto Error;
   }
   
   // Allocate GPU buffers for three vectors (two input, one output)    .
@@ -265,32 +297,27 @@ cudaError_t addWithCuda(const int* addends_1, const int* addends_2, int* sums, u
   cudaStatus = cudaMalloc((void**)&dev_sums, size * sizeof(int));
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMalloc failed!");
-    goto Error;
   }
 
   cudaStatus = cudaMalloc((void**)&dev_addends_1, size * sizeof(int));
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMalloc failed!");
-    goto Error;
   }
 
   cudaStatus = cudaMalloc((void**)&dev_addends_2, size * sizeof(int));
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMalloc failed!");
-    goto Error;
   }
 
   // Copy input vectors from host memory to GPU buffers.
   cudaStatus = cudaMemcpy(dev_addends_1, addends_1, size * sizeof(int), cudaMemcpyHostToDevice);
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMemcpy failed!");
-    goto Error;
   }
 
   cudaStatus = cudaMemcpy(dev_addends_2, addends_2, size * sizeof(int), cudaMemcpyHostToDevice);
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMemcpy failed!");
-    goto Error;
   }
 
   // This is where it all happens. We're issuing the go command to the 
@@ -308,7 +335,6 @@ cudaError_t addWithCuda(const int* addends_1, const int* addends_2, int* sums, u
   cudaStatus = cudaGetLastError();
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "sumIntArrays_k launch failed: %s\n", cudaGetErrorString(cudaStatus));
-    goto Error;
   }
 
   // cudaDeviceSynchronize waits for the kernel to finish, and returns
@@ -317,24 +343,36 @@ cudaError_t addWithCuda(const int* addends_1, const int* addends_2, int* sums, u
   cudaStatus = cudaDeviceSynchronize();
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching sumIntArrays_k!\n", cudaStatus);
-    goto Error;
   }
 
   // Copy output vector from GPU buffer to host memory.
   cudaStatus = cudaMemcpy(sums, dev_sums, size * sizeof(int), cudaMemcpyDeviceToHost);
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "cudaMemcpy failed!");
-    goto Error;
   }
 
   // Tell c++/cuda we're done with the memory we requested on the device with malloc.
   // Please release it for reuse.
-Error:
   cudaFree(dev_sums);
   cudaFree(dev_addends_1);
   cudaFree(dev_addends_2);
 
   return cudaStatus;
+}
+
+/*----------------------------------------------------------- SETUP and CLEANUP */
+
+// CudaCleanup makes sure cuda profilers can display info 
+// up to the end of execution.
+cudaError_t Cuda_Cleanup()
+{
+  //cudaDeviceReset must be called before exiting in order for profiling and
+  // tracing tools such as Nsight and Visual Profiler to show complete traces.
+  cudaError_t status = cudaDeviceReset();
+  if (status != cudaSuccess) {
+    fprintf(stderr, "cudaDeviceReset failed!");
+  }
+  return status;
 }
 
 bool Setup_SDL2()

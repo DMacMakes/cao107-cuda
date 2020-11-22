@@ -60,6 +60,7 @@ void rollCreepers(Creeper* creepers);
 SDL_Window* window_p{ nullptr };
 SDL_GLContext gl_context;
 const char* glsl_version_p = "";
+
 const unsigned int CREEPER_COUNT = 32;
 const int CREEPER_MAX_DIST = 20;
 
@@ -90,14 +91,12 @@ __global__ void castMeteorStrike_kernel(Creeper* creepers)
   }
   else if (creepers[i].distance < 6.0f)
   {
-    creepers[i].health -= 60.0f;
+    creepers[i].health -= 0.6f;
   }
   else if (creepers[i].distance < 12.0f)
   {
-    creepers[i].health -= 35.0f;
+    creepers[i].health -= 0.35f;
   }
-  // Change to actually testing the distance from a hero using
-  // distance between 2 points. (pythagoras)
 }
 
 /*------------------------------------------------------------------------- MAIN */
